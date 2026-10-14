@@ -17,7 +17,13 @@ db = client[os.environ['DB_NAME']]
 JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALGORITHM = "HS256"
 EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
+LLM_KEY = os.environ.get("ANTHROPIC_API_KEY") or EMERGENT_KEY
 APP_NAME = "pratodigital"
+
+USE_CLOUDINARY = bool(os.environ.get("CLOUDINARY_CLOUD_NAME"))
+if USE_CLOUDINARY:
+    import cloudinary, cloudinary.uploader
+    cloudinary.config(cloud_name=os.environ["CLOUDINARY_CLOUD_NAME"], api_key=os.environ["CLOUDINARY_API_KEY"], api_secret=os.environ["CLOUDINARY_API_SECRET"], secure=True)
 
 STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
 STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
@@ -216,9 +222,14 @@ async def set_plan(body: PlanIn, user=Depends(get_current_user)):
 @api_router.post("/upload")
 async def upload(file: UploadFile = File(...), user=Depends(get_current_user)):
     await get_active_restaurant(user)
+    if not (file.content_type or "").startswith("image/"):
+        raise HTTPException(400, "Envie apenas imagens")
+    data = await file.read()
+    if USE_CLOUDINARY:
+        res = cloudinary.uploader.upload(data, folder=f"{APP_NAME}/users/{user['id']}/images", resource_type="image")
+        return {"path": res["secure_url"]}
     ext = file.filename.split(".")[-1].lower() if "." in file.filename else "jpg"
     path = f"{APP_NAME}/uploads/{user['id']}/{uuid.uuid4()}.{ext}"
-    data = await file.read()
     result = put_object(path, data, file.content_type or "image/jpeg")
     await db.files.insert_one({"id": str(uuid.uuid4()), "storage_path": result["path"], "content_type": file.content_type or "image/jpeg", "is_deleted": False, "created_at": datetime.now(timezone.utc).isoformat()})
     return {"path": result["path"]}
@@ -298,7 +309,7 @@ async def ai_promo(body: PromoIn, user=Depends(get_current_user)):
     r = await get_active_restaurant(user)
     from emergentintegrations.llm.chat import LlmChat, UserMessage
     system = f"Você é um especialista em marketing para restaurantes. Escreva mensagens promocionais curtas e persuasivas em português do Brasil para WhatsApp/SMS. Tom: {body.tone}. Inclua emojis moderados e uma chamada para ação. Nome do restaurante: {r['name']}. Responda APENAS com a mensagem pronta para envio."
-    chat = LlmChat(api_key=EMERGENT_KEY, session_id=f"promo-{r['id']}", system_message=system).with_model("anthropic", "claude-sonnet-5-5")
+    chat = LlmChat(api_key=LLM_KEY, session_id=f"promo-{r['id']}", system_message=system).with_model("anthropic", "claude-sonnet-5-5")
     prompt = f"Crie uma promoção do tipo '{body.preset}'. Detalhes adicionais: {body.details or 'nenhum'}."
     try:
         msg = await chat.send_message(UserMessage(text=prompt))
@@ -449,7 +460,7 @@ async def public_order_status(oid: str):
     return {"id": o["id"], "status": o["status"], "total": o["total"]}
 
 app.include_router(api_router)
-app.add_middleware(CORSMiddleware, allow_credentials=False, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_credentials=False, allow_origins=[o.strip() for o in os.environ["CORS_ORIGINS"].split(",")], allow_methods=["*"], allow_headers=["*"])
 
 # ---------------- Seed ----------------
 async def seed():
@@ -459,10 +470,11 @@ async def seed():
         await db.restaurants.create_index("slug", unique=True)
     except Exception as e:
         logger.warning(f"index: {e}")
-    try:
-        init_storage()
-    except Exception as e:
-        logger.error(f"storage init: {e}")
+    if not USE_CLOUDINARY:
+        try:
+            init_storage()
+        except Exception as e:
+            logger.error(f"storage init: {e}")
     admin_email = os.environ["ADMIN_EMAIL"].lower()
     existing = await db.users.find_one({"email": admin_email})
     if existing:

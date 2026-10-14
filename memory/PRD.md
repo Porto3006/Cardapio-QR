@@ -12,6 +12,8 @@ React 19 + Tailwind + shadcn | FastAPI (server.py) | MongoDB | Stripe Billing (a
 - (Jun/2026) Bloqueio pós-trial: sem trial ativo e sem assinatura ativa → todas as rotas do painel retornam 402; cardápio público/pedidos retornam 403 (QR Codes desativados). Frontend só libera a tela Plano, com banner de bloqueio e menu com cadeados. `GET /api/restaurant` retorna `access_active`.
 - Webhook trata `customer.subscription.updated/deleted` para atualizar status.
 
+- (Jun/2026) Compatibilidade com deploy externo: `frontend/vercel.json` (SPA), `render.yaml` + `backend/Procfile` + `.python-version`, CORS via `CORS_ORIGINS`, Cloudinary opcional (ativa com `CLOUDINARY_*`), IA usa `ANTHROPIC_API_KEY` se definida, `.env.example` e guia `/app/DEPLOY.md`. Preview Emergent continua igual.
+
 ## Backlog
 - P1: Envio real das promoções por WhatsApp/SMS (hoje só registra campanha — MOCKADO).
 - P2: Restringir recursos por plano (ex.: IA só no Avançado), relatórios.
