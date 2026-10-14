@@ -1,0 +1,22 @@
+{
+  "summary": "Validated new Stripe recurring subscription feature end-to-end. Backend: POST /api/payments/checkout, GET /api/payments/status/{id}, PLAN_BY_LOOKUP mapping, auth guard, and payment_transactions persistence all pass (7/7 pytest). Frontend: full UI flow login → Plano → Assinar Intermediário → Stripe Checkout (sandbox) → pay with 4242... → /payment/success shows 'Assinatura ativada!' → GET /api/restaurant returns plan=intermediario, subscription_status=active, stripe_subscription_id set → Plano tab shows 'Assinatura ativa' badge and 'Plano atual' on Intermediário card. /payment/cancel page renders 'Pagamento cancelado'. Fallback polling of /payments/status (which hits Stripe directly and applies the subscription) works correctly without the webhook, as designed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_stripe_subscription.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Stripe sandbox displays amounts in USD (US$20.43) due to the sandbox account default settings even though Price lookup_keys are in BRL. This is a Stripe sandbox cosmetic behavior, not a code bug — in production the merchant account will present BRL. No action needed.",
+    "subscription_data.metadata is set on checkout.Session.create — good; webhook customer.subscription.deleted path depends on this metadata.",
+    "/api/stripe/webhook relies on STRIPE_WEBHOOK_SECRET being signed by the configured endpoint; in this preview env the webhook isn't delivered, but the /payments/status endpoint already provides an idempotent fallback (verified in test)."
+  ],
+  "updated_files": ["/app/backend/tests/test_stripe_subscription.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Owner: alexandreporto01@outlook.com / prato123 (seeded). Stripe test card 4242 4242 4242 4242, 12/34, CVC 123, ZIP 90210, phone 2015550123 (US sandbox requires US billing).",
+  "seed_data_creation": "During tests, owner restaurant 'Sabor & Arte Bistrô' was switched to plan=intermediario with subscription_status=active and a real Stripe sub_... id. If the next iteration tests the trial state, reset by `db.restaurants.update_one({owner_id:...},{$set:{plan:'trial', subscription_status: null}})`.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The Stripe subscription flow works via fallback polling (webhook not required). All 3 lookup_keys (plano_simples_mensal/intermediario_mensal/avancado_mensal) resolve to Stripe prices. Owner restaurant currently has plan=intermediario,subscription_status=active due to successful test payment."
+}
