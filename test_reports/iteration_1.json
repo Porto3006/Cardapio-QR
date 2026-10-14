@@ -1,0 +1,41 @@
+{
+  "summary": "Smoke tested PratoDigital (cardápio digital SaaS). Auth, restaurant CRUD, categories/items CRUD, upload+file serving, public menu, public order placement, order status update, plan change, register-new-owner all passed. Frontend login -> painel -> Cardápio/QR/Cozinha/Promoções render correctly. Public menu on mobile adds to cart and shows cart bar. Only blocker is AI Promo endpoint returning 500 due to EMERGENT_LLM_KEY budget exceeded.",
+  "tested_scope": ["backend", "frontend", "auth", "integration"],
+  "passed": [
+    "POST /api/auth/login with admin credentials returns token + user",
+    "GET /api/auth/me returns owner profile",
+    "POST /api/auth/register creates new owner + restaurant (trial) + returns token",
+    "GET /api/restaurant returns 'Sabor & Arte Bistrô' slug 'sabor-e-arte' plan=trial",
+    "PUT /api/restaurant toggles is_open true<->false",
+    "POST /api/restaurant/plan switches plan (intermediario) and back to trial",
+    "POST /api/categories creates category; DELETE removes it (200)",
+    "POST /api/items creates item under category",
+    "POST /api/upload returns path; GET /api/files/{full/path} serves file 200",
+    "GET /api/public/menu/sabor-e-arte returns restaurant+4 categories+8 items",
+    "POST /api/public/order/sabor-e-arte (fields: table, customer_name, phone, note, items[qty]) creates order status=novo, total correct",
+    "GET /api/public/order/{id} returns status and total",
+    "GET /api/orders lists owner orders (seeded + newly created visible)",
+    "PATCH /api/orders/{id}/status?status=preparo updates status",
+    "POST /api/ai/promo/send registers campaign {ok:true, recipients:1}",
+    "Frontend login flow navigates to /painel; sidebar tabs Visão Geral, Cardápio, QR Code & Mesas, Cozinha ao Vivo, Promoções IA all render",
+    "Kitchen board shows 3 columns and orders created via public endpoint appear with correct status (Em Preparo / Novos)",
+    "QR Code tab renders QR SVG for Mesa 01",
+    "Public menu /menu/sabor-e-arte renders on mobile viewport, add-to-cart increments quantity and shows '1 item(s) · R$ 24,90 · Ver pedido' bar"
+  ],
+  "failed": [
+    {
+      "area": "AI Promo integration (POST /api/ai/promo)",
+      "issue": "Endpoint returns HTTP 500. Backend log: emergentintegrations.llm.chat.ChatError: litellm.RateLimitError: OpenAIException - Budget has been exceeded! Key=db7q5jlrt6cc7391sua0 Current cost: 0.0, Max budget: 0.0. The EMERGENT_LLM_KEY configured in backend/.env has a $0 budget and cannot execute Claude calls.",
+      "evidence": "curl POST /api/ai/promo with {preset:'combo_almoco',details,tone} -> HTTP 500 'Internal Server Error'. Stack trace at server.py line 276 chat.send_message.",
+      "priority": "HIGH"
+    }
+  ],
+  "action_items": [
+    "Replace/refresh EMERGENT_LLM_KEY in /app/backend/.env with a key that has a non-zero budget (or request budget top-up) so /api/ai/promo can generate messages via claude-sonnet-5-5. All other backend+frontend flows are production-ready for first finish.",
+    "Optional: wrap ai_promo in try/except to return a friendlier 503 message instead of raw 500 when LLM budget is exhausted."
+  ],
+  "success_rate": {"backend": "94%", "frontend": "100%"},
+  "retest_needed": true,
+  "full_testing_deferred": true,
+  "notes": "ai/promo/send is intentionally only a campaign registration (no WhatsApp/SMS dispatch) per problem statement - not a bug. Order schema uses table/phone/note/qty (not table_number/customer_phone/notes/quantity) and the frontend PublicMenu.js already sends the correct fields."
+}

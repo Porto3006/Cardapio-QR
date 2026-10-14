@@ -27,7 +27,7 @@ export default function AIPromo() {
       const { data } = await api.post("/ai/promo", { preset, details, tone });
       setMessage(data.message);
       toast.success("Mensagem gerada pela IA!");
-    } catch { toast.error("Erro ao gerar mensagem"); } finally { setLoading(false); }
+    } catch (err) { toast.error(err.response?.data?.detail || "Erro ao gerar mensagem"); } finally { setLoading(false); }
   };
   const copy = () => { navigator.clipboard.writeText(message); toast.success("Copiado!"); };
   const send = async () => {

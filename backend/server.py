@@ -273,8 +273,14 @@ async def ai_promo(body: PromoIn, user=Depends(get_current_user)):
     system = f"Você é um especialista em marketing para restaurantes. Escreva mensagens promocionais curtas e persuasivas em português do Brasil para WhatsApp/SMS. Tom: {body.tone}. Inclua emojis moderados e uma chamada para ação. Nome do restaurante: {r['name']}. Responda APENAS com a mensagem pronta para envio."
     chat = LlmChat(api_key=EMERGENT_KEY, session_id=f"promo-{r['id']}", system_message=system).with_model("anthropic", "claude-sonnet-5-5")
     prompt = f"Crie uma promoção do tipo '{body.preset}'. Detalhes adicionais: {body.details or 'nenhum'}."
-    msg = await chat.send_message(UserMessage(text=prompt))
-    return {"message": msg}
+    try:
+        msg = await chat.send_message(UserMessage(text=prompt))
+        return {"message": msg}
+    except Exception as e:
+        logger.error(f"ai_promo error: {e}")
+        if "budget" in str(e).lower() or "quota" in str(e).lower():
+            raise HTTPException(402, "Saldo da chave de IA esgotado. Adicione saldo em Perfil → Gerenciar plano → Universal Key para gerar mensagens.")
+        raise HTTPException(503, "A IA está indisponível no momento. Tente novamente em instantes.")
 
 @api_router.post("/ai/promo/send")
 async def send_promo(body: dict, user=Depends(get_current_user)):
