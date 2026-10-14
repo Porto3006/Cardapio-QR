@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { Routes, Route, NavLink, useNavigate } from "react-router-dom";
+import { Routes, Route, NavLink, Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { LayoutGrid, UtensilsCrossed, QrCode, ChefHat, Sparkles, Settings, LogOut, Utensils, Menu as MenuIcon, Store, Check, Loader2 } from "lucide-react";
+import { LayoutGrid, UtensilsCrossed, QrCode, ChefHat, Sparkles, Settings, LogOut, Utensils, Menu as MenuIcon, Store, Check, Loader2, Lock, CreditCard } from "lucide-react";
 import { api, BRL } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ export default function Dashboard() {
 
   const load = () => api.get("/restaurant").then((r) => setRest(r.data)).catch(() => {});
   useEffect(() => { load(); }, []);
+  const blocked = rest && !rest.access_active;
 
   const toggleOpen = async (v) => {
     const { data } = await api.put("/restaurant", { is_open: v });
@@ -41,7 +42,11 @@ export default function Dashboard() {
       <aside className={`fixed lg:static z-40 inset-y-0 left-0 w-64 bg-olive text-white flex flex-col transition-transform ${open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
         <div className="p-5 flex items-center gap-2 font-heading font-extrabold text-lg border-b border-white/10"><Utensils size={20} /> PratoDigital</div>
         <nav className="flex-1 p-3 space-y-1">
-          {nav.map((n) => (
+          {nav.map((n) => blocked && n.to !== "/painel/plano" ? (
+            <div key={n.to} data-testid={n.testid} aria-disabled="true" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-white/30 cursor-not-allowed">
+              <n.icon size={18} /> {n.label} <Lock size={14} className="ml-auto" />
+            </div>
+          ) : (
             <NavLink key={n.to} to={n.to} end={n.end} data-testid={n.testid} onClick={() => setOpen(false)}
               className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${isActive ? "bg-terracotta text-white font-semibold" : "text-white/70 hover:bg-white/10"}`}>
               <n.icon size={18} /> {n.label}
@@ -61,21 +66,30 @@ export default function Dashboard() {
             <button className="lg:hidden" onClick={() => setOpen(true)} data-testid="sidebar-toggle"><MenuIcon /></button>
             <div className="flex items-center gap-2"><Store size={18} className="text-terracotta" /><span className="font-heading font-bold">{rest?.name || "..."}</span></div>
           </div>
-          <div className="flex items-center gap-2 text-sm">
+          <div className={`flex items-center gap-2 text-sm ${blocked ? "hidden" : ""}`}>
             <span className={rest?.is_open ? "text-olive font-semibold" : "text-muted-foreground"}>{rest?.is_open ? "Aberto" : "Fechado"}</span>
             <Switch checked={!!rest?.is_open} onCheckedChange={toggleOpen} data-testid="restaurant-open-toggle" />
           </div>
         </header>
 
         <div className="p-5 lg:p-8 max-w-6xl">
-          <Routes>
-            <Route index element={<Overview rest={rest} />} />
-            <Route path="cardapio" element={<MenuManager />} />
-            <Route path="qrcode" element={<QRCodes rest={rest} />} />
-            <Route path="cozinha" element={<KitchenBoard />} />
-            <Route path="promocoes" element={<AIPromo />} />
-            <Route path="plano" element={<PlanSettings rest={rest} reload={load} />} />
-          </Routes>
+          {!rest ? (
+            <div className="grid place-items-center py-20" data-testid="dashboard-loading"><Loader2 className="animate-spin text-terracotta" /></div>
+          ) : blocked ? (
+            <Routes>
+              <Route path="plano" element={<PlanSettings rest={rest} reload={load} />} />
+              <Route path="*" element={<Navigate to="/painel/plano" replace />} />
+            </Routes>
+          ) : (
+            <Routes>
+              <Route index element={<Overview rest={rest} />} />
+              <Route path="cardapio" element={<MenuManager />} />
+              <Route path="qrcode" element={<QRCodes rest={rest} />} />
+              <Route path="cozinha" element={<KitchenBoard />} />
+              <Route path="promocoes" element={<AIPromo />} />
+              <Route path="plano" element={<PlanSettings rest={rest} reload={load} />} />
+            </Routes>
+          )}
         </div>
       </main>
     </div>
@@ -87,7 +101,7 @@ function Overview({ rest }) {
   useEffect(() => {
     Promise.all([api.get("/orders"), api.get("/items"), api.get("/customers")]).then(([o, i, c]) => {
       setStats({ orders: o.data.length, items: i.data.length, customers: c.data.length, revenue: o.data.reduce((s, x) => s + (x.total || 0), 0) });
-    });
+    }).catch(() => {});
   }, []);
   const trialDays = rest?.trial_ends_at ? Math.max(0, Math.ceil((new Date(rest.trial_ends_at) - new Date()) / 86400000)) : 0;
   const cards = [
@@ -133,11 +147,34 @@ function PlanSettings({ rest, reload }) {
       setLoading(null);
     }
   };
+  const openPortal = async () => {
+    setLoading("portal");
+    try {
+      const { data } = await api.post("/payments/portal", { origin_url: window.location.origin });
+      window.location.href = data.portal_url;
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Erro ao abrir o portal de faturamento");
+      setLoading(null);
+    }
+  };
   const active = rest?.subscription_status === "active";
   return (
     <div className="animate-float-up">
-      <h1 className="text-2xl font-bold font-heading">Seu Plano</h1>
-      <p className="text-muted-foreground text-sm mt-1">Plano atual: <span className="font-semibold capitalize text-foreground">{rest?.plan === "trial" ? "Teste grátis (30 dias)" : rest?.plan}</span>{active && <span className="ml-2 text-xs bg-olive text-white px-2 py-0.5 rounded-full">Assinatura ativa</span>}</p>
+      {rest && !rest.access_active && (
+        <div data-testid="trial-expired-banner" className="mb-5 rounded-2xl bg-destructive/10 border border-destructive/30 p-4 flex items-start gap-3">
+          <Lock size={18} className="text-destructive shrink-0 mt-0.5" />
+          <div className="text-sm"><p className="font-semibold">Seu acesso está bloqueado</p><p className="text-muted-foreground">O período de teste terminou e não há assinatura ativa. O painel e os QR Codes do cardápio ficam desativados até você assinar um plano.</p></div>
+        </div>
+      )}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h1 className="text-2xl font-bold font-heading">Seu Plano</h1>
+        {rest?.stripe_customer_id && (
+          <Button variant="outline" onClick={openPortal} disabled={loading === "portal"} data-testid="billing-portal-button" className="rounded-full">
+            {loading === "portal" ? <Loader2 className="animate-spin" size={16} /> : <><CreditCard size={16} className="mr-1" /> Gerenciar assinatura</>}
+          </Button>
+        )}
+      </div>
+      <p className="text-muted-foreground text-sm mt-1">Plano atual: <span className="font-semibold capitalize text-foreground">{rest?.plan === "trial" ? (rest?.access_active ? "Teste grátis (30 dias)" : "Teste grátis expirado") : rest?.plan}</span>{active && <span className="ml-2 text-xs bg-olive text-white px-2 py-0.5 rounded-full">Assinatura ativa</span>}</p>
       <div className="grid md:grid-cols-3 gap-5 mt-6">
         {plans.map((p) => {
           const current = rest?.plan === p.id && active;

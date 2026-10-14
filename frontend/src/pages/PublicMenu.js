@@ -24,7 +24,7 @@ export default function PublicMenu() {
   const [form, setForm] = useState({ customer_name: "", phone: "", note: "" });
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => { api.get(`/public/menu/${slug}`).then((r) => { setData(r.data); setActiveCat(r.data.categories[0]?.id); }).catch(() => setNotFound(true)); }, [slug]);
+  useEffect(() => { api.get(`/public/menu/${slug}`).then((r) => { setData(r.data); setActiveCat(r.data.categories[0]?.id); }).catch((e) => setNotFound(e.response?.data?.detail || "Cardápio não encontrado.")); }, [slug]);
 
   useEffect(() => {
     if (!placed) return;
@@ -32,7 +32,7 @@ export default function PublicMenu() {
     return () => clearInterval(t);
   }, [placed]);
 
-  if (notFound) return <div className="min-h-screen grid place-items-center text-muted-foreground p-6 text-center">Cardápio não encontrado.</div>;
+  if (notFound) return <div className="min-h-screen grid place-items-center text-muted-foreground p-6 text-center" data-testid="public-menu-unavailable">{notFound}</div>;
   if (!data) return <div className="min-h-screen grid place-items-center"><Loader2 className="animate-spin text-terracotta" /></div>;
 
   const { restaurant, categories, items } = data;

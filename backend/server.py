@@ -88,6 +88,17 @@ def slugify(name):
     s = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
     return s or "restaurante"
 
+def has_premium(r):
+    if r.get("subscription_status") == "active":
+        return True
+    te = r.get("trial_ends_at")
+    if te:
+        try:
+            return datetime.fromisoformat(te) > datetime.now(timezone.utc)
+        except Exception:
+            return False
+    return False
+
 # ---------------- Models ----------------
 class RegisterIn(BaseModel):
     name: str
@@ -141,6 +152,16 @@ class PromoIn(BaseModel):
 async def get_restaurant_for(user):
     return await db.restaurants.find_one({"owner_id": user["id"]}, {"_id": 0})
 
+BLOCK_MSG = "Seu período de teste terminou. Assine um plano para continuar usando o PratoDigital."
+
+async def get_active_restaurant(user):
+    r = await get_restaurant_for(user)
+    if not r:
+        raise HTTPException(404, "Restaurante não encontrado")
+    if not has_premium(r):
+        raise HTTPException(402, BLOCK_MSG)
+    return r
+
 @api_router.post("/auth/register")
 async def register(body: RegisterIn):
     email = body.email.lower()
@@ -174,11 +195,12 @@ async def my_restaurant(user=Depends(get_current_user)):
     r = await get_restaurant_for(user)
     if not r:
         raise HTTPException(404, "Restaurante não encontrado")
+    r["access_active"] = has_premium(r)
     return r
 
 @api_router.put("/restaurant")
 async def update_restaurant(body: RestaurantUpdate, user=Depends(get_current_user)):
-    r = await get_restaurant_for(user)
+    r = await get_active_restaurant(user)
     upd = {k: v for k, v in body.model_dump().items() if v is not None}
     if upd:
         await db.restaurants.update_one({"id": r["id"]}, {"$set": upd})
@@ -186,13 +208,14 @@ async def update_restaurant(body: RestaurantUpdate, user=Depends(get_current_use
 
 @api_router.post("/restaurant/plan")
 async def set_plan(body: PlanIn, user=Depends(get_current_user)):
-    r = await get_restaurant_for(user)
+    r = await get_active_restaurant(user)
     await db.restaurants.update_one({"id": r["id"]}, {"$set": {"plan": body.plan}})
     return {"ok": True, "plan": body.plan}
 
 # ---------------- Upload ----------------
 @api_router.post("/upload")
 async def upload(file: UploadFile = File(...), user=Depends(get_current_user)):
+    await get_active_restaurant(user)
     ext = file.filename.split(".")[-1].lower() if "." in file.filename else "jpg"
     path = f"{APP_NAME}/uploads/{user['id']}/{uuid.uuid4()}.{ext}"
     data = await file.read()
@@ -211,68 +234,68 @@ async def download(path: str):
 # ---------------- Categories & Items ----------------
 @api_router.get("/categories")
 async def list_categories(user=Depends(get_current_user)):
-    r = await get_restaurant_for(user)
+    r = await get_active_restaurant(user)
     return await db.categories.find({"restaurant_id": r["id"]}, {"_id": 0}).sort("created_at", 1).to_list(500)
 
 @api_router.post("/categories")
 async def add_category(body: CategoryIn, user=Depends(get_current_user)):
-    r = await get_restaurant_for(user)
+    r = await get_active_restaurant(user)
     cat = {"id": str(uuid.uuid4()), "restaurant_id": r["id"], "name": body.name, "created_at": datetime.now(timezone.utc).isoformat()}
     await db.categories.insert_one(cat)
     return {k: v for k, v in cat.items() if k != "_id"}
 
 @api_router.delete("/categories/{cid}")
 async def del_category(cid: str, user=Depends(get_current_user)):
-    r = await get_restaurant_for(user)
+    r = await get_active_restaurant(user)
     await db.categories.delete_one({"id": cid, "restaurant_id": r["id"]})
     await db.items.delete_many({"category_id": cid, "restaurant_id": r["id"]})
     return {"ok": True}
 
 @api_router.get("/items")
 async def list_items(user=Depends(get_current_user)):
-    r = await get_restaurant_for(user)
+    r = await get_active_restaurant(user)
     return await db.items.find({"restaurant_id": r["id"]}, {"_id": 0}).sort("created_at", 1).to_list(1000)
 
 @api_router.post("/items")
 async def add_item(body: ItemIn, user=Depends(get_current_user)):
-    r = await get_restaurant_for(user)
+    r = await get_active_restaurant(user)
     item = {"id": str(uuid.uuid4()), "restaurant_id": r["id"], **body.model_dump(), "created_at": datetime.now(timezone.utc).isoformat()}
     await db.items.insert_one(item)
     return {k: v for k, v in item.items() if k != "_id"}
 
 @api_router.put("/items/{iid}")
 async def update_item(iid: str, body: ItemIn, user=Depends(get_current_user)):
-    r = await get_restaurant_for(user)
+    r = await get_active_restaurant(user)
     await db.items.update_one({"id": iid, "restaurant_id": r["id"]}, {"$set": body.model_dump()})
     return await db.items.find_one({"id": iid}, {"_id": 0})
 
 @api_router.delete("/items/{iid}")
 async def del_item(iid: str, user=Depends(get_current_user)):
-    r = await get_restaurant_for(user)
+    r = await get_active_restaurant(user)
     await db.items.delete_one({"id": iid, "restaurant_id": r["id"]})
     return {"ok": True}
 
 # ---------------- Orders (owner) ----------------
 @api_router.get("/orders")
 async def list_orders(user=Depends(get_current_user)):
-    r = await get_restaurant_for(user)
+    r = await get_active_restaurant(user)
     return await db.orders.find({"restaurant_id": r["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
 
 @api_router.patch("/orders/{oid}/status")
 async def update_order_status(oid: str, status: str = Query(...), user=Depends(get_current_user)):
-    r = await get_restaurant_for(user)
+    r = await get_active_restaurant(user)
     await db.orders.update_one({"id": oid, "restaurant_id": r["id"]}, {"$set": {"status": status}})
     return await db.orders.find_one({"id": oid}, {"_id": 0})
 
 @api_router.get("/customers")
 async def list_customers(user=Depends(get_current_user)):
-    r = await get_restaurant_for(user)
+    r = await get_active_restaurant(user)
     return await db.customers.find({"restaurant_id": r["id"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
 
 # ---------------- AI Promo ----------------
 @api_router.post("/ai/promo")
 async def ai_promo(body: PromoIn, user=Depends(get_current_user)):
-    r = await get_restaurant_for(user)
+    r = await get_active_restaurant(user)
     from emergentintegrations.llm.chat import LlmChat, UserMessage
     system = f"Você é um especialista em marketing para restaurantes. Escreva mensagens promocionais curtas e persuasivas em português do Brasil para WhatsApp/SMS. Tom: {body.tone}. Inclua emojis moderados e uma chamada para ação. Nome do restaurante: {r['name']}. Responda APENAS com a mensagem pronta para envio."
     chat = LlmChat(api_key=EMERGENT_KEY, session_id=f"promo-{r['id']}", system_message=system).with_model("anthropic", "claude-sonnet-5-5")
@@ -288,7 +311,7 @@ async def ai_promo(body: PromoIn, user=Depends(get_current_user)):
 
 @api_router.post("/ai/promo/send")
 async def send_promo(body: dict, user=Depends(get_current_user)):
-    r = await get_restaurant_for(user)
+    r = await get_active_restaurant(user)
     count = await db.customers.count_documents({"restaurant_id": r["id"]})
     camp = {"id": str(uuid.uuid4()), "restaurant_id": r["id"], "message": body.get("message", ""), "recipients": count, "created_at": datetime.now(timezone.utc).isoformat()}
     await db.campaigns.insert_one(camp)
@@ -299,10 +322,13 @@ class CheckoutRequest(BaseModel):
     lookup_key: str
     origin_url: str
 
-async def apply_subscription(session_id, lookup_key, user_id, subscription_id):
+async def apply_subscription(session_id, lookup_key, user_id, subscription_id, customer_id=None):
     plan = PLAN_BY_LOOKUP.get(lookup_key)
     if plan and user_id:
-        await db.restaurants.update_one({"owner_id": user_id}, {"$set": {"plan": plan, "stripe_subscription_id": subscription_id, "subscription_status": "active"}})
+        upd = {"plan": plan, "stripe_subscription_id": subscription_id, "subscription_status": "active"}
+        if customer_id:
+            upd["stripe_customer_id"] = customer_id
+        await db.restaurants.update_one({"owner_id": user_id}, {"$set": upd})
 
 @api_router.post("/payments/checkout")
 async def create_checkout(req: CheckoutRequest, user=Depends(get_current_user)):
@@ -339,11 +365,32 @@ async def payment_status(session_id: str):
                     {"session_id": session_id, "payment_status": {"$ne": "paid"}},
                     {"$set": {"status": "completed", "payment_status": "paid", "stripe_subscription_id": s.subscription, "updated_at": datetime.now(timezone.utc).isoformat()}})
                 if res.modified_count:
-                    await apply_subscription(session_id, record["lookup_key"], record["user_id"], s.subscription)
+                    await apply_subscription(session_id, record["lookup_key"], record["user_id"], s.subscription, s.customer)
                 record = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
         except stripe.error.StripeError:
             pass
     return {"session_id": record["session_id"], "status": record["status"], "payment_status": record["payment_status"], "plan": PLAN_BY_LOOKUP.get(record["lookup_key"])}
+
+@api_router.post("/payments/portal")
+async def billing_portal(body: dict, user=Depends(get_current_user)):
+    r = await get_restaurant_for(user)
+    cust = r.get("stripe_customer_id")
+    if not cust:
+        raise HTTPException(400, "Nenhuma assinatura ativa encontrada.")
+    origin = body.get("origin_url") or ""
+    return_url = f"{origin}/painel/plano"
+    try:
+        sess = stripe.billing_portal.Session.create(customer=cust, return_url=return_url)
+    except stripe.error.InvalidRequestError as e:
+        if "configuration" in str(e).lower():
+            cfg = stripe.billing_portal.Configuration.create(
+                business_profile={"headline": "PratoDigital"},
+                features={"subscription_cancel": {"enabled": True, "mode": "at_period_end"}, "payment_method_update": {"enabled": True}, "invoice_history": {"enabled": True}},
+            )
+            sess = stripe.billing_portal.Session.create(customer=cust, configuration=cfg.id, return_url=return_url)
+        else:
+            raise
+    return {"portal_url": sess.url}
 
 @api_router.post("/stripe/webhook")
 async def stripe_webhook(request: Request):
@@ -360,11 +407,10 @@ async def stripe_webhook(request: Request):
             {"$set": {"status": "completed", "payment_status": obj.get("payment_status", "paid"), "stripe_subscription_id": obj.get("subscription"), "updated_at": datetime.now(timezone.utc).isoformat()}})
         if res.modified_count:
             md = obj.get("metadata", {}) or {}
-            await apply_subscription(obj["id"], md.get("lookup_key", ""), md.get("user_id", ""), obj.get("subscription"))
-    elif t == "customer.subscription.deleted":
-        md = obj.get("metadata", {}) or {}
-        if md.get("user_id"):
-            await db.restaurants.update_one({"owner_id": md["user_id"]}, {"$set": {"subscription_status": "canceled"}})
+            await apply_subscription(obj["id"], md.get("lookup_key", ""), md.get("user_id", ""), obj.get("subscription"), obj.get("customer"))
+    elif t in ("customer.subscription.deleted", "customer.subscription.updated"):
+        status = "canceled" if t == "customer.subscription.deleted" else ("active" if obj.get("status") in ("active", "trialing") else obj.get("status"))
+        await db.restaurants.update_one({"stripe_subscription_id": obj.get("id")}, {"$set": {"subscription_status": status}})
     return {"status": "ok"}
 
 # ---------------- Public (customer) ----------------
@@ -373,6 +419,8 @@ async def public_menu(slug: str):
     r = await db.restaurants.find_one({"slug": slug}, {"_id": 0})
     if not r:
         raise HTTPException(404, "Cardápio não encontrado")
+    if not has_premium(r):
+        raise HTTPException(403, "Este cardápio está temporariamente indisponível.")
     cats = await db.categories.find({"restaurant_id": r["id"]}, {"_id": 0}).sort("created_at", 1).to_list(500)
     items = await db.items.find({"restaurant_id": r["id"], "available": True}, {"_id": 0}).sort("created_at", 1).to_list(1000)
     return {"restaurant": r, "categories": cats, "items": items}
@@ -382,6 +430,8 @@ async def place_order(slug: str, body: OrderIn):
     r = await db.restaurants.find_one({"slug": slug})
     if not r:
         raise HTTPException(404, "Restaurante não encontrado")
+    if not has_premium(r):
+        raise HTTPException(403, "Este cardápio está temporariamente indisponível.")
     total = sum(i.price * i.qty for i in body.items)
     order = {"id": str(uuid.uuid4()), "restaurant_id": r["id"], "table": body.table, "customer_name": body.customer_name, "phone": body.phone, "items": [i.model_dump() for i in body.items], "note": body.note, "total": total, "status": "novo", "created_at": datetime.now(timezone.utc).isoformat()}
     await db.orders.insert_one(order)
