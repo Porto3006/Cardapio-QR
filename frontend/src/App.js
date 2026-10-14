@@ -6,6 +6,7 @@ import Landing from "@/pages/Landing";
 import Auth from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
 import PublicMenu from "@/pages/PublicMenu";
+import PaymentResult from "@/pages/PaymentResult";
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -25,6 +26,8 @@ function App() {
           <Route path="/cadastrar" element={<Auth mode="register" />} />
           <Route path="/painel/*" element={<Protected><Dashboard /></Protected>} />
           <Route path="/menu/:slug" element={<PublicMenu />} />
+          <Route path="/payment/success" element={<Protected><PaymentResult status="success" /></Protected>} />
+          <Route path="/payment/cancel" element={<Protected><PaymentResult status="cancel" /></Protected>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

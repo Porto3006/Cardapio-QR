@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Routes, Route, NavLink, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { LayoutGrid, UtensilsCrossed, QrCode, ChefHat, Sparkles, Settings, LogOut, Utensils, Menu as MenuIcon, Store } from "lucide-react";
+import { LayoutGrid, UtensilsCrossed, QrCode, ChefHat, Sparkles, Settings, LogOut, Utensils, Menu as MenuIcon, Store, Check, Loader2 } from "lucide-react";
 import { api, BRL } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -117,30 +117,43 @@ function Overview({ rest }) {
 }
 
 function PlanSettings({ rest, reload }) {
+  const [loading, setLoading] = useState(null);
   const plans = [
-    { id: "simples", name: "Simples", price: "49" }, { id: "intermediario", name: "Intermediário", price: "99" }, { id: "avancado", name: "Avançado", price: "189" },
+    { id: "simples", name: "Simples", price: "49", features: ["Cardápio ilimitado", "QR Code por mesa", "Pedidos pelo celular"] },
+    { id: "intermediario", name: "Intermediário", price: "99", features: ["Tudo do Simples", "Cozinha ao vivo", "Comprovante de impressão"] },
+    { id: "avancado", name: "Avançado", price: "189", features: ["Tudo do Intermediário", "Promoções com IA", "Clientes e relatórios"] },
   ];
   const choose = async (id) => {
-    await api.post("/restaurant/plan", { plan: id });
-    toast.success("Plano atualizado!");
-    reload();
+    setLoading(id);
+    try {
+      const { data } = await api.post("/payments/checkout", { lookup_key: `plano_${id}_mensal`, origin_url: window.location.origin });
+      window.location.href = data.checkout_url;
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Erro ao iniciar pagamento");
+      setLoading(null);
+    }
   };
+  const active = rest?.subscription_status === "active";
   return (
     <div className="animate-float-up">
       <h1 className="text-2xl font-bold font-heading">Seu Plano</h1>
-      <p className="text-muted-foreground text-sm mt-1">Plano atual: <span className="font-semibold capitalize text-foreground">{rest?.plan === "trial" ? "Teste grátis (30 dias)" : rest?.plan}</span></p>
+      <p className="text-muted-foreground text-sm mt-1">Plano atual: <span className="font-semibold capitalize text-foreground">{rest?.plan === "trial" ? "Teste grátis (30 dias)" : rest?.plan}</span>{active && <span className="ml-2 text-xs bg-olive text-white px-2 py-0.5 rounded-full">Assinatura ativa</span>}</p>
       <div className="grid md:grid-cols-3 gap-5 mt-6">
-        {plans.map((p) => (
-          <div key={p.id} className={`rounded-2xl border p-6 ${rest?.plan === p.id ? "border-terracotta ring-2 ring-terracotta/30" : "border-border"} bg-card`}>
-            <h3 className="font-heading font-bold text-lg">{p.name}</h3>
-            <p className="text-3xl font-extrabold font-heading mt-2">R$ {p.price}<span className="text-base text-muted-foreground font-normal">/mês</span></p>
-            <Button onClick={() => choose(p.id)} disabled={rest?.plan === p.id} data-testid={`plan-select-${p.id}`} className="w-full mt-5 rounded-full" variant={rest?.plan === p.id ? "outline" : "default"}>
-              {rest?.plan === p.id ? "Plano atual" : "Selecionar"}
-            </Button>
-          </div>
-        ))}
+        {plans.map((p) => {
+          const current = rest?.plan === p.id && active;
+          return (
+            <div key={p.id} className={`rounded-2xl border p-6 ${current ? "border-terracotta ring-2 ring-terracotta/30" : "border-border"} bg-card`}>
+              <h3 className="font-heading font-bold text-lg">{p.name}</h3>
+              <p className="text-3xl font-extrabold font-heading mt-2">R$ {p.price}<span className="text-base text-muted-foreground font-normal">/mês</span></p>
+              <ul className="mt-4 space-y-2 text-sm">{p.features.map((f) => <li key={f} className="flex items-start gap-2"><Check size={16} className="text-olive shrink-0 mt-0.5" />{f}</li>)}</ul>
+              <Button onClick={() => choose(p.id)} disabled={current || loading === p.id} data-testid={`plan-select-${p.id}`} className={`w-full mt-5 rounded-full ${current ? "" : "bg-terracotta hover:bg-terracotta-dark text-white"}`} variant={current ? "outline" : "default"}>
+                {loading === p.id ? <Loader2 className="animate-spin" size={16} /> : current ? "Plano atual" : "Assinar"}
+              </Button>
+            </div>
+          );
+        })}
       </div>
-      <p className="text-xs text-muted-foreground mt-4">Cobrança é apenas demonstrativa neste ambiente de teste.</p>
+      <p className="text-xs text-muted-foreground mt-4">Pagamento seguro via Stripe. Cartão de teste: 4242 4242 4242 4242, qualquer data futura e CVC.</p>
     </div>
   );
 }

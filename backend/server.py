@@ -5,7 +5,7 @@ load_dotenv(Path(__file__).parent / '.env')
 
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-import os, logging, uuid, re, bcrypt, jwt, requests
+import os, logging, uuid, re, bcrypt, jwt, requests, stripe
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional
@@ -22,6 +22,10 @@ APP_NAME = "pratodigital"
 STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
 STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
 storage_key = None
+
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY") or "sk_test_emergent"
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+PLAN_BY_LOOKUP = {"plano_simples_mensal": "simples", "plano_intermediario_mensal": "intermediario", "plano_avancado_mensal": "avancado"}
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -289,6 +293,79 @@ async def send_promo(body: dict, user=Depends(get_current_user)):
     camp = {"id": str(uuid.uuid4()), "restaurant_id": r["id"], "message": body.get("message", ""), "recipients": count, "created_at": datetime.now(timezone.utc).isoformat()}
     await db.campaigns.insert_one(camp)
     return {"ok": True, "recipients": count}
+
+# ---------------- Stripe payments (owner subscriptions) ----------------
+class CheckoutRequest(BaseModel):
+    lookup_key: str
+    origin_url: str
+
+async def apply_subscription(session_id, lookup_key, user_id, subscription_id):
+    plan = PLAN_BY_LOOKUP.get(lookup_key)
+    if plan and user_id:
+        await db.restaurants.update_one({"owner_id": user_id}, {"$set": {"plan": plan, "stripe_subscription_id": subscription_id, "subscription_status": "active"}})
+
+@api_router.post("/payments/checkout")
+async def create_checkout(req: CheckoutRequest, user=Depends(get_current_user)):
+    prices = stripe.Price.list(lookup_keys=[req.lookup_key], active=True, limit=1).data
+    if not prices:
+        raise HTTPException(500, f"Plano não encontrado: {req.lookup_key}")
+    price = prices[0]
+    session = stripe.checkout.Session.create(
+        line_items=[{"price": price.id, "quantity": 1}],
+        mode="subscription",
+        success_url=f"{req.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
+        cancel_url=f"{req.origin_url}/payment/cancel",
+        metadata={"user_id": user["id"], "lookup_key": req.lookup_key},
+        subscription_data={"metadata": {"user_id": user["id"], "lookup_key": req.lookup_key}},
+    )
+    await db.payment_transactions.insert_one({
+        "session_id": session.id, "user_id": user["id"], "lookup_key": req.lookup_key,
+        "amount": (price.unit_amount or 0) / 100, "currency": price.currency,
+        "status": "initiated", "payment_status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat(), "updated_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"checkout_url": session.url, "session_id": session.id}
+
+@api_router.get("/payments/status/{session_id}")
+async def payment_status(session_id: str):
+    record = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+    if not record:
+        raise HTTPException(404, "Transação não encontrada")
+    if record.get("payment_status") != "paid":
+        try:
+            s = stripe.checkout.Session.retrieve(session_id)
+            if s.payment_status == "paid" or s.status == "complete":
+                res = await db.payment_transactions.update_one(
+                    {"session_id": session_id, "payment_status": {"$ne": "paid"}},
+                    {"$set": {"status": "completed", "payment_status": "paid", "stripe_subscription_id": s.subscription, "updated_at": datetime.now(timezone.utc).isoformat()}})
+                if res.modified_count:
+                    await apply_subscription(session_id, record["lookup_key"], record["user_id"], s.subscription)
+                record = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+        except stripe.error.StripeError:
+            pass
+    return {"session_id": record["session_id"], "status": record["status"], "payment_status": record["payment_status"], "plan": PLAN_BY_LOOKUP.get(record["lookup_key"])}
+
+@api_router.post("/stripe/webhook")
+async def stripe_webhook(request: Request):
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature", "")
+    try:
+        event = stripe.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
+    except Exception:
+        raise HTTPException(400, "Assinatura inválida")
+    obj, t = event["data"]["object"], event["type"]
+    if t == "checkout.session.completed":
+        res = await db.payment_transactions.update_one(
+            {"session_id": obj["id"], "payment_status": {"$ne": "paid"}},
+            {"$set": {"status": "completed", "payment_status": obj.get("payment_status", "paid"), "stripe_subscription_id": obj.get("subscription"), "updated_at": datetime.now(timezone.utc).isoformat()}})
+        if res.modified_count:
+            md = obj.get("metadata", {}) or {}
+            await apply_subscription(obj["id"], md.get("lookup_key", ""), md.get("user_id", ""), obj.get("subscription"))
+    elif t == "customer.subscription.deleted":
+        md = obj.get("metadata", {}) or {}
+        if md.get("user_id"):
+            await db.restaurants.update_one({"owner_id": md["user_id"]}, {"$set": {"subscription_status": "canceled"}})
+    return {"status": "ok"}
 
 # ---------------- Public (customer) ----------------
 @api_router.get("/public/menu/{slug}")
