@@ -1,0 +1,130 @@
+{
+  "project_info": {
+    "name": "PratoDigital - Cardápio Digital & Sistema para Restaurantes",
+    "locale": "pt-BR",
+    "app_type": "hybrid_fullstack",
+    "target_audience": "Restauranteurs, donos de bares, lanchonetes, cafeterias e clientes finais (comensais)"
+  },
+  "color_palette": {
+    "archetype": "Organic & Earthy / Culinary Artisan",
+    "mode": "Dual Context (Warm Cream Light Mode for Marketing/Public Menu & High-Contrast Slate Dark Mode for Kitchen Panel)",
+    "colors": {
+      "background": {
+        "light": "#FAF7F2",
+        "light_card": "#FFFFFF",
+        "dark": "#121110",
+        "dark_card": "#1C1A18"
+      },
+      "text": {
+        "primary_dark": "#1A1817",
+        "secondary_dark": "#57534E",
+        "primary_light": "#F5F5F4",
+        "secondary_light": "#A8A29E"
+      },
+      "brand": {
+        "primary_terracotta": "#D9532F",
+        "primary_hover": "#B83E1E",
+        "olive_accent": "#2D3B2D",
+        "olive_light": "#E8F0E8",
+        "amber_gold": "#E68A00",
+        "amber_light": "#FFF7ED"
+      },
+      "status": {
+        "new_order_blue": "#2563EB",
+        "preparing_amber": "#D97706",
+        "ready_green": "#16A34A",
+        "cancelled_red": "#DC2626"
+      },
+      "border": {
+        "subtle": "#E7E5E4",
+        "dark_subtle": "#2E2B27"
+      }
+    }
+  },
+  "typography": {
+    "heading_font": "Outfit, 'Plus Jakarta Sans', sans-serif",
+    "body_font": "'DM Sans', 'Inter', sans-serif",
+    "mono_font": "'JetBrains Mono', monospace",
+    "font_imports": [
+      "https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Outfit:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap"
+    ],
+    "scale": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-none",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight",
+      "h3": "text-xl sm:text-2xl font-semibold tracking-tight",
+      "h4": "text-lg sm:text-xl font-medium",
+      "body": "text-base leading-relaxed text-stone-700 dark:text-stone-300",
+      "overline": "text-xs uppercase font-bold tracking-[0.2em] text-terracotta-600"
+    }
+  },
+  "image_urls": {
+    "hero_restaurant": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzV8MHwxfHNlYXJjaHwxfHxyZXN0YXVyYW50JTIwb3duZXIlMjBjaGVmJTIwZGluaW5nJTIwZXhwZXJpZW5jZSUyMGludGVyaW9yfGVufDB8fHx8MTc5MTk5MjQ4MHww&ixlib=rb-4.1.0&q=85",
+    "chef_cooking": "https://images.unsplash.com/photo-1622021142947-da7dedc7c39a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzV8MHwxfHNlYXJjaHwyfHxyZXN0YXVyYW50JTIwb3duZXIlMjBjaGVmJTIwZGluaW5nJTIwZXhwZXJpZW5jZSUyMGludGVyaW9yfGVufDB8fHx8MTc5MTk5MjQ4MHww&ixlib=rb-4.1.0&q=85",
+    "dining_ambience": "https://images.unsplash.com/photo-1602232037779-30b01ac3c457?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzV8MHwxfHNlYXJjaHwzfHxyZXN0YXVyYW50JTIwb3duZXIlMjBjaGVmJTIwZGluaW5nJTIwZXhwZXJpZW5jZSUyMGludGVyaW9yfGVufDB8fHx8MTc5MTk5MjQ4MHww&ixlib=rb-4.1.0&q=85",
+    "dishes": {
+      "pasta_wine": "https://images.unsplash.com/photo-1532117472055-4d0734b51f31?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjh8MHwxfHNlYXJjaHszfHxnb3VybWV0JTIwcmVzdGF1cmFudCUyMGZvb2QlMjBkaXNoZXMlMjBwaXp6YSUyMGJ1cmdlciUyMHBhc3RhJTIwc3VzaGl8ZW58MHx8fHwxNzkxOTkyNDgwfDA&ixlib=rb-4.1.0&q=85",
+      "gourmet_plate": "https://images.unsplash.com/photo-1515668166700-4c11137632fc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjh8MHwxfHNlYXJjaHw0fHxnb3VybWV0JTIwcmVzdGF1cmFudCUyMGZvb2QlMjBkaXNoZXMlMjBwaXp6YSUyMGJ1cmdlciUyMHBhc3RhJTIwc3VzaGl8ZW58MHx8fHwxNzkxOTkyNDgwfDA&ixlib=rb-4.1.0&q=85",
+      "burger_fries": "https://images.unsplash.com/photo-1502998070258-dc1338445ac2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjh8MHwxfHNlYXJjaHxfHxnb3VybWV0JTIwcmVzdGF1cmFudCUyMGZvb2QlMjBkaXNoZXMlMjBwaXp6YSUyMGJ1cmdlciUyMHBhc3RhJTIwc3VzaGl8ZW58MHx8fHwxNzkxOTkyNDgwfDA&ixlib=rb-4.1.0&q=85",
+      "steak_dish": "https://images.unsplash.com/photo-1515668236457-83c3b8764839?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjh8MHwxfHNlYXJjaHwyfHxnb3VybWV0JTIwcmVzdGF1cmFudCUyMGZvb2QlMjBkaXNoZXMlMjBwaXp6YSUyMGJ1cmdlciUyMHBhc3RhJTIwc3VzaGl8ZW58MHx8fHwxNzkxOTkyNDgwfDA&ixlib=rb-4.1.0&q=85"
+    }
+  },
+  "component_structure": {
+    "landing_page": {
+      "navbar": "Fixed blurred glass header (`bg-stone-50/80 backdrop-blur-md border-b border-stone-200 z-50`). Includes logo, link options ('Recursos', 'Como Funciona', 'Planos', 'Demonstração'), and CTA 'Teste 30 Dias Grátis' / 'Área do Restaurante'.",
+      "hero": "Asymmetric bento dynamic hero with live interactive QR Code simulator, key benefits tag ('Sem comissão por pedido'), headline 'Seu cardápio digital moderno, sem complicação.', and direct CTA button to register.",
+      "live_demo_section": "Interactive preview where visitors can switch between owner manager panel view and customer phone view.",
+      "pricing_plans": "3 distinct plans card matrix: 'Simples' (R$ 49/mês), 'Intermediário' (R$ 99/mês - Destacado com badge 'Mais Popular'), 'Avançado' (R$ 189/mês). All plans showcase 30 days free trial callout.",
+      "features_bento": "6-grid Bento box: Instant QR Code, Live Kitchen Board, Printable Receipts, AI Promotions Generator, Analytics & Metrics, Mobile Responsive Speed.",
+      "footer": "Rich dark footer with quick links, support info, and restaurant tech tips."
+    },
+    "owner_dashboard": {
+      "layout": "Sidebar navigation (Visão Geral, Gerenciador de Cardápio, QR Code & Mesas, Cozinha ao Vivo, Promoções IA, Configurações do Plano) + Top bar with restaurant status toggle ('Aberto' / 'Fechado').",
+      "menu_manager": "Category accordion builder with dish add/edit modal (name, price, category, photo URL/upload simulator, description, status 'Disponível'/'Esgotado').",
+      "qr_generator": "Custom QR code generator for tables (Mesa 01, Mesa 02, Balcão, Delivery) with instant SVG download & print layout preview.",
+      "kitchen_live_board": "Real-time column layout: 'Novos' (Blue), 'Em Preparo' (Amber), 'Prontos' (Green). Sound notification toggle, order detail view, and 'Imprimir Comprovante' thermal receipt modal.",
+      "ai_promo_tool": "AI-powered promotional message generator for WhatsApp/SMS. Presets ('Cupom Sextou', 'Happy Hour 2x1', 'Lançamento de Prato'). Generates copy instantly with quick copy-to-clipboard button and audience selector."
+    },
+    "customer_mobile_menu": {
+      "layout": "Mobile viewport container (max-w-md mx-auto), header with restaurant banner, table badge (ex: 'Mesa 04'), search input, horizontal scrolling category pills.",
+      "item_card": "Horizontal or grid card with image thumbnail, title, description, price (R$ XX,XX), and counter button (+ / -).",
+      "floating_cart": "Fixed bottom bar showing items count, total value, and 'Ver Pedido' button.",
+      "checkout_modal": "Customer name, table number / takeout confirmation, item review, order note, and 'Enviar Pedido para Cozinha' button. Live status updates step ('Pedido Recebido' -> 'Em Preparo' -> 'Pronto')."
+    }
+  },
+  "testing_and_accessibility": {
+    "data_testid_rules": "All interactive elements (buttons, inputs, filters, tabs, status badges, cart items, print triggers) MUST include a kebab-case data-testid attribute.",
+    "sample_test_ids": [
+      "landing-cta-start-trial",
+      "landing-plan-simple-select",
+      "landing-plan-intermediate-select",
+      "landing-plan-advanced-select",
+      "owner-login-email-input",
+      "owner-login-password-input",
+      "owner-login-submit-button",
+      "dashboard-nav-menu-manager",
+      "dashboard-nav-kitchen-board",
+      "dashboard-nav-ai-promo",
+      "menu-add-category-button",
+      "menu-add-item-button",
+      "qr-generate-table-input",
+      "qr-print-button",
+      "kitchen-order-status-change",
+      "kitchen-print-receipt-button",
+      "ai-promo-prompt-select",
+      "ai-promo-generate-button",
+      "ai-promo-copy-button",
+      "customer-menu-category-filter",
+      "customer-menu-add-item-button",
+      "customer-cart-open-button",
+      "customer-order-submit-button"
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Use standard JavaScript React (.js files, NOT .tsx).",
+    "Keep all copy natural and fluent in Brazilian Portuguese (pt-BR).",
+    "Provide seed mock data for 3 restaurants (e.g. 'Sabor & Arte Bistro', 'Pizzaria Bella Napoli', 'Burger Craft Lab') so demo is vibrant out of the box.",
+    "Ensure state changes (e.g., adding menu item, placing order, updating order status to kitchen, generating AI promo text) immediately update UI and notify with Sonner toasts.",
+    "Do not use dark flat blanket overlays over hero images; use subtle background gradients or warm solid cards.",
+    "Ensure 30-day free trial ('30 Dias Grátis') is prominently highlighted across marketing headers, hero section, and pricing plan cards."
+  ]
+}
