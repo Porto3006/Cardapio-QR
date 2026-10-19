@@ -1,4 +1,55 @@
-# Guia de Deploy — PratoDigital (Vercel + Render + MongoDB Atlas)
+# Guia de Deploy — PratoDigital
+
+## Deploy 100% Vercel (frontend + backend serverless)
+
+O projeto agora suporta deploy completo no Vercel: frontend estático + backend FastAPI como função serverless Python, tudo no mesmo domínio.
+
+Arquitetura Vercel: **Frontend (React/Vite) + Backend (FastAPI serverless) no Vercel** · **Banco no MongoDB Atlas** · **Imagens no Cloudinary** (opcional) · **IA com sua chave Anthropic** · **Pagamentos Stripe**.
+
+### 1. MongoDB Atlas
+1. Crie um cluster grátis em https://cloud.mongodb.com
+2. Em *Database Access*, crie um usuário e senha.
+3. Em *Network Access*, libere `0.0.0.0/0`.
+4. Copie a connection string (`mongodb+srv://...`) → será o `MONGO_URL`.
+
+### 2. Importar no Vercel
+1. No Vercel: **Add New → Project** → importe o repositório.
+2. **Root Directory: deixe vazio (raiz do repositório)** — o `vercel.json` na raiz configura tudo (build do frontend em `frontend/` + API serverless em `api/`).
+3. **Não** defina `REACT_APP_BACKEND_URL` — com ele vazio, o frontend chama `/api/*` no mesmo domínio (same-origin), roteado para a função Python pelo Vercel.
+
+### 3. Variáveis de ambiente no Vercel
+Em **Settings → Environment Variables**, defina:
+- `MONGO_URL` = connection string do MongoDB Atlas
+- `DB_NAME` = `pratodigital` (ou o nome do banco)
+- `JWT_SECRET` = qualquer string aleatória longa
+- `ADMIN_EMAIL` = email do admin (ex.: `admin@pratodigital.com`)
+- `ADMIN_PASSWORD` = senha do admin (ex.: `pratodigital123`)
+- `STRIPE_SECRET_KEY` = sua chave do Stripe
+- `STRIPE_WEBHOOK_SECRET` = (opcional) secret do webhook Stripe
+- `ANTHROPIC_API_KEY` = (opcional) chave da Anthropic para promoções com IA
+- `ANTHROPIC_MODEL` = (opcional) modelo da Anthropic (padrão: `claude-sonnet-4-20250514`)
+- `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` = (opcional) para upload de imagens
+
+### 4. Stripe
+1. Rode uma vez localmente: `python backend/setup_stripe.py` (cria os 3 planos na sua conta).
+2. Em Stripe → Developers → Webhooks → **Add endpoint**: `https://SEU-DOMINIO-VERCEL/api/stripe/webhook`
+   - Eventos: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`.
+3. Copie o *Signing secret* (`whsec_...`) para `STRIPE_WEBHOOK_SECRET` no Vercel.
+
+### 5. Deploy
+- Clique em **Deploy**. O Vercel vai:
+  1. Instalar as deps Python do `requirements.txt` raiz (~75 MB, bem abaixo do limite de 250 MB).
+  2. Instalar as deps do frontend (`yarn install` em `frontend/`).
+  3. Buildar o frontend (`yarn build` → `frontend/build/`).
+  4. Servir `api/index.py` como função serverless Python.
+- Acesse a URL do Vercel, entre com `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
+
+### Tamanho da função serverless
+O `requirements.txt` raiz contém apenas as dependências runtime mínimas (~75 MB). Pacotes pesados desnecessários (numpy, pandas, litellm, tokenizers, tiktoken, boto3, google-*, etc.) foram removidos. A feature de IA agora chama a API Anthropic diretamente via `requests` em vez de usar `emergentintegrations`/`litellm` (economiza ~300 MB).
+
+---
+
+## Deploy alternativo: Vercel (frontend) + Render (backend)
 
 Arquitetura: **Frontend (React/Vite) no Vercel** · **Backend (FastAPI) no Render** (ou Railway) · **Banco no MongoDB Atlas** · **Imagens no Cloudinary** · **IA com sua chave Anthropic** · **Pagamentos Stripe**.
 

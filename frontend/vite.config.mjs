@@ -3,7 +3,9 @@ import { createRequire } from "node:module";
 import { defineConfig, loadEnv, transformWithOxc } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { visualEdits } from "@emergentbase/visual-edits/vite";
+// visualEdits is loaded dynamically inside defineConfig (see below) so the build
+// does not crash if the @emergentbase/visual-edits package is unavailable (e.g. on
+// Vercel where the tgz URL may be unreachable).
 
 const require = createRequire(import.meta.url);
 
@@ -79,13 +81,22 @@ if (!hotReloadDisabled) {
 export default defineConfig(async ({ mode, command }) => {
   const env = loadEnv(mode, __dirname, ["REACT_APP_", "VITE_"]);
   const emergentOverlay = await loadEmergentOverlay();
+  let visualEditsFn = null;
+  if (!visualEditsDisabled) {
+    try {
+      const mod = await import("@emergentbase/visual-edits/vite");
+      visualEditsFn = mod.visualEdits;
+    } catch (e) {
+      console.warn("[visual-edits] plugin failed to load; disabling:", e instanceof Error ? e.message : e);
+    }
+  }
   return {
     plugins: [
       // Visual-edit tagging is dev-server-only, matching the package's own apply: serve.
       jsxInJs({ tagForVisualEdits: command === "serve" && !visualEditsDisabled }),
       react(),
       tailwindcss(),
-      ...(visualEditsDisabled ? [] : [visualEdits()]),
+      ...(visualEditsFn ? [visualEditsFn()] : []),
       // No isServe guard: this factory takes no ConfigEnv arg, so build purity here rests
       // on the package's own `apply: "serve"`.
       ...(emergentOverlay ? [emergentOverlay] : []),

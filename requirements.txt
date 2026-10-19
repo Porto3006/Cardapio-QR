@@ -1,0 +1,21 @@
+# Minimal Python dependencies for Vercel serverless deployment.
+#
+# Only the runtime deps actually imported by backend/server.py are listed.
+# Dev tools (black, flake8, mypy, pytest), heavy AI SDKs (litellm, openai,
+# tiktoken, tokenizers, huggingface_hub), and unused packages (numpy, pandas,
+# boto3, grpcio, google-*) are excluded to stay well under Vercel's 250 MB
+# serverless function unzipped limit.
+#
+# The AI promo feature now calls the Anthropic API directly via `requests`
+# instead of pulling in emergentintegrations/litellm (saves ~300 MB).
+fastapi==0.110.1
+starlette==0.37.2
+motor==3.3.1
+bcrypt==4.1.3
+PyJWT==2.15.1
+requests==2.34.2
+stripe==14.4.1
+python-multipart==0.0.32
+python-dotenv==1.2.4
+email-validator==2.3.0
+cloudinary==1.46.3

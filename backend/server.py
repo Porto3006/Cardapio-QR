@@ -10,11 +10,12 @@ from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional
 
-mongo_url = os.environ['MONGO_URL']
+mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[os.environ.get('DB_NAME', 'pratodigital')]
 
-JWT_SECRET = os.environ['JWT_SECRET']
+JWT_SECRET = os.environ.get('JWT_SECRET', 'dev-secret-change-me')
+ANTHROPIC_MODEL = os.environ.get('ANTHROPIC_MODEL', 'claude-sonnet-4-20250514')
 JWT_ALGORITHM = "HS256"
 EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
 LLM_KEY = os.environ.get("ANTHROPIC_API_KEY") or EMERGENT_KEY
@@ -307,17 +308,30 @@ async def list_customers(user=Depends(get_current_user)):
 @api_router.post("/ai/promo")
 async def ai_promo(body: PromoIn, user=Depends(get_current_user)):
     r = await get_active_restaurant(user)
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    if not LLM_KEY:
+        raise HTTPException(503, "IA não configurada. Defina ANTHROPIC_API_KEY nas variáveis de ambiente.")
     system = f"Você é um especialista em marketing para restaurantes. Escreva mensagens promocionais curtas e persuasivas em português do Brasil para WhatsApp/SMS. Tom: {body.tone}. Inclua emojis moderados e uma chamada para ação. Nome do restaurante: {r['name']}. Responda APENAS com a mensagem pronta para envio."
-    chat = LlmChat(api_key=LLM_KEY, session_id=f"promo-{r['id']}", system_message=system).with_model("anthropic", "claude-sonnet-5-5")
     prompt = f"Crie uma promoção do tipo '{body.preset}'. Detalhes adicionais: {body.details or 'nenhum'}."
     try:
-        msg = await chat.send_message(UserMessage(text=prompt))
+        resp = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={"x-api-key": LLM_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+            json={"model": ANTHROPIC_MODEL, "max_tokens": 1024, "system": system, "messages": [{"role": "user", "content": prompt}]},
+            timeout=60,
+        )
+        if resp.status_code == 401:
+            raise HTTPException(503, "Chave da API Anthropic inválida. Verifique ANTHROPIC_API_KEY.")
+        if resp.status_code == 429:
+            raise HTTPException(429, "Limite de requisições atingido. Tente novamente em instantes.")
+        if resp.status_code != 200:
+            logger.error(f"ai_promo error: {resp.status_code} {resp.text}")
+            raise HTTPException(503, "A IA está indisponível no momento. Tente novamente em instantes.")
+        msg = resp.json()["content"][0]["text"]
         return {"message": msg}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"ai_promo error: {e}")
-        if "budget" in str(e).lower() or "quota" in str(e).lower():
-            raise HTTPException(402, "Saldo da chave de IA esgotado. Adicione saldo em Perfil → Gerenciar plano → Universal Key para gerar mensagens.")
         raise HTTPException(503, "A IA está indisponível no momento. Tente novamente em instantes.")
 
 @api_router.post("/ai/promo/send")
@@ -460,7 +474,8 @@ async def public_order_status(oid: str):
     return {"id": o["id"], "status": o["status"], "total": o["total"]}
 
 app.include_router(api_router)
-app.add_middleware(CORSMiddleware, allow_credentials=False, allow_origins=[o.strip() for o in os.environ["CORS_ORIGINS"].split(",")], allow_methods=["*"], allow_headers=["*"])
+_cors = os.environ.get("CORS_ORIGINS", "*")
+app.add_middleware(CORSMiddleware, allow_credentials=False, allow_origins=[o.strip() for o in _cors.split(",")], allow_methods=["*"], allow_headers=["*"])
 
 # ---------------- Seed ----------------
 async def seed():
@@ -475,12 +490,12 @@ async def seed():
             init_storage()
         except Exception as e:
             logger.error(f"storage init: {e}")
-    admin_email = os.environ["ADMIN_EMAIL"].lower()
+    admin_email = os.environ.get("ADMIN_EMAIL", "admin@pratodigital.com").lower()
     existing = await db.users.find_one({"email": admin_email})
     if existing:
         return
     uid = str(uuid.uuid4())
-    await db.users.insert_one({"id": uid, "email": admin_email, "name": "Alexandre", "password_hash": hash_password(os.environ["ADMIN_PASSWORD"]), "role": "owner", "created_at": datetime.now(timezone.utc).isoformat()})
+    await db.users.insert_one({"id": uid, "email": admin_email, "name": "Alexandre", "password_hash": hash_password(os.environ.get("ADMIN_PASSWORD", "pratodigital123")), "role": "owner", "created_at": datetime.now(timezone.utc).isoformat()})
     rid = str(uuid.uuid4())
     await db.restaurants.insert_one({"id": rid, "owner_id": uid, "name": "Sabor & Arte Bistrô", "slug": "sabor-e-arte", "description": "Cozinha artesanal com ingredientes frescos.", "phone": "(11) 99999-0000", "is_open": True, "plan": "trial", "trial_ends_at": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(), "created_at": datetime.now(timezone.utc).isoformat()})
     demo = {
