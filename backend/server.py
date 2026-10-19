@@ -1,6 +1,7 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Request, UploadFile, File, Depends, Response, Query
 from dotenv import load_dotenv
 from pathlib import Path
+from contextlib import asynccontextmanager
 load_dotenv(Path(__file__).parent / '.env')
 
 from starlette.middleware.cors import CORSMiddleware
@@ -34,7 +35,13 @@ stripe.api_key = os.environ.get("STRIPE_SECRET_KEY") or "sk_test_emergent"
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 PLAN_BY_LOOKUP = {"plano_simples_mensal": "simples", "plano_intermediario_mensal": "intermediario", "plano_avancado_mensal": "avancado"}
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app):
+    await seed()
+    yield
+    client.close()
+
+app = FastAPI(lifespan=lifespan)
 api_router = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("pratodigital")
@@ -477,6 +484,31 @@ app.include_router(api_router)
 _cors = os.environ.get("CORS_ORIGINS", "*")
 app.add_middleware(CORSMiddleware, allow_credentials=False, allow_origins=[o.strip() for o in _cors.split(",")], allow_methods=["*"], allow_headers=["*"])
 
+# ---------------- Stripe catalog (auto-create on cold start) ----------------
+STRIPE_CATALOG = [
+    ("plano_simples", "PratoDigital - Plano Simples", "plano_simples_mensal", 4900),
+    ("plano_intermediario", "PratoDigital - Plano Intermediário", "plano_intermediario_mensal", 9900),
+    ("plano_avancado", "PratoDigital - Plano Avançado", "plano_avancado_mensal", 18900),
+]
+
+def _ensure_stripe_catalog():
+    """Idempotent — creates the 3 plan prices in Stripe if they don't exist yet."""
+    if not (stripe.api_key or "").startswith("sk_"):
+        return
+    for pid, name, lookup_key, amount in STRIPE_CATALOG:
+        if stripe.Price.list(lookup_keys=[lookup_key], active=True, limit=1).data:
+            continue
+        product = None
+        for p in stripe.Product.list(active=True).auto_paging_iter():
+            if p.to_dict().get("metadata", {}).get("emergent_product_id") == pid:
+                product = p
+                break
+        if not product:
+            product = stripe.Product.create(name=name, metadata={"emergent_product_id": pid})
+        stripe.Price.create(product=product.id, unit_amount=amount, currency="brl",
+            lookup_key=lookup_key, transfer_lookup_key=True, recurring={"interval": "month"})
+        logger.info(f"Created Stripe price {lookup_key}")
+
 # ---------------- Seed ----------------
 async def seed():
     try:
@@ -490,6 +522,10 @@ async def seed():
             init_storage()
         except Exception as e:
             logger.error(f"storage init: {e}")
+    try:
+        _ensure_stripe_catalog()
+    except Exception as e:
+        logger.warning(f"stripe catalog: {e}")
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@pratodigital.com").lower()
     existing = await db.users.find_one({"email": admin_email})
     if existing:
@@ -516,10 +552,4 @@ async def seed():
     await db.orders.insert_one({"id": str(uuid.uuid4()), "restaurant_id": rid, "table": "Mesa 04", "customer_name": "João Silva", "phone": "", "items": [{"item_id": "x", "name": "Risoto de Funghi", "price": 58.0, "qty": 1}], "note": "Sem cebola", "total": 58.0, "status": "novo", "created_at": datetime.now(timezone.utc).isoformat()})
     logger.info("Seed concluído")
 
-@app.on_event("startup")
-async def on_start():
-    await seed()
-
-@app.on_event("shutdown")
-async def shutdown_db():
-    client.close()
+# Lifespan is handled by the asynccontextmanager above (Vercel ASGI compatible)
